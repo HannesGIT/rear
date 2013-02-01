@@ -37,17 +37,6 @@ if [[ "$opath" ]]; then
     mkdir -p $v "${opath}" >&2
 fi
 
-# Disable BACKUP_PROG_CRYPT_OPTIONS by replacing the default value to cat in 
-# case encryption is disabled
-if (( $BACKUP_PROG_CRYPT_ENABLED == 1 )); then
-  LogPrint "Encrypting archive with key: $BACKUP_PROG_CRYPT_KEY"
-else
-  LogPrint "Encrypting disabled"
-  BACKUP_PROG_CRYPT_OPTIONS="cat"
-  BACKUP_PROG_CRYPT_KEY=""
-fi 
-
-
 LogPrint "Creating $BACKUP_PROG archive '$backuparchive'"
 ProgressStart "Preparing archive operation"
 (
@@ -59,14 +48,14 @@ case "$(basename ${BACKUP_PROG})" in
 			--no-wildcards-match-slash --one-file-system \
 			--ignore-failed-read $BACKUP_PROG_OPTIONS \
 			${BACKUP_PROG_BLOCKS:+-b $BACKUP_PROG_BLOCKS} $BACKUP_PROG_COMPRESS_OPTIONS \
-			-X $TMP_DIR/backup-exclude.txt -C / -c -f - \
-			$(cat $TMP_DIR/backup-include.txt) $LOGFILE \| $BACKUP_PROG_CRYPT_OPTIONS $BACKUP_PROG_CRYPT_KEY \| dd of="$backuparchive"
+			-X $TMP_DIR/backup-exclude.txt -C / -c -f "$backuparchive" \
+			$(cat $TMP_DIR/backup-include.txt) $LOGFILE
 		$BACKUP_PROG $TAR_OPTIONS --sparse --block-number --totals --verbose \
 			--no-wildcards-match-slash --one-file-system \
 			--ignore-failed-read $BACKUP_PROG_OPTIONS \
 			${BACKUP_PROG_BLOCKS:+-b $BACKUP_PROG_BLOCKS} $BACKUP_PROG_COMPRESS_OPTIONS \
-			-X $TMP_DIR/backup-exclude.txt -C / -c -f - \
-			$(cat $TMP_DIR/backup-include.txt) $LOGFILE | $BACKUP_PROG_CRYPT_OPTIONS $BACKUP_PROG_CRYPT_KEY | dd of="$backuparchive"
+			-X $TMP_DIR/backup-exclude.txt -C / -c -f "$backuparchive" \
+			$(cat $TMP_DIR/backup-include.txt) $LOGFILE
 	;;
 	(rsync)
 		# make sure that the target is a directory
@@ -107,7 +96,7 @@ function get_disk_used() {
 case "$(basename ${BACKUP_PROG})" in
 	(tar)
 		while sleep 1 ; kill -0 $BackupPID 2>&8; do
-			blocks="$(stat -c %b ${backuparchive})"
+			blocks="$(tail -1 ${TMP_DIR}/${BACKUP_PROG_ARCHIVE}.log | awk 'BEGIN { FS="[ :]" } /^block [0-9]+: / { print $2 }')"
 			size="$((blocks*512))"
 			#echo -en "\e[2K\rArchived $((size/1024/1024)) MiB [avg $((size/1024/(SECONDS-starttime))) KiB/sec]"
 			ProgressInfo "Archived $((size/1024/1024)) MiB [avg $((size/1024/(SECONDS-starttime))) KiB/sec]"
